@@ -1,0 +1,166 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+# Only the release job writes anything back to the repository.
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: ${{ matrix.label }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # 22.04 rather than the newest image: binaries built against an older
+          # glibc keep working on newer distributions, not the other way round.
+          - os: ubuntu-22.04
+            label: linux
+            package: kilocycle-linux-x86_64.tar.gz
+          - os: windows-2022
+            label: windows
+            package: kilocycle-windows-x64.zip
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            ninja-build \
+            libasound2-dev \
+            libfreetype-dev \
+            libfontconfig1-dev \
+            libx11-dev libxext-dev libxrandr-dev libxinerama-dev \
+            libxcursor-dev libxcomposite-dev libxrender-dev \
+            libgl1-mesa-dev \
+            fonts-dejavu-core
+
+      - name: Configure
+        run: >
+          cmake -B build
+          -DCMAKE_BUILD_TYPE=Release
+          -DKILOCYCLE_COPY_AFTER_BUILD=OFF
+          -DKILOCYCLE_BUILD_TOOLS=ON
+
+      - name: Build
+        run: cmake --build build --config Release --parallel 4
+
+      - name: DSP checks
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            ./build/KilocycleDevTool_artefacts/Release/KilocycleDevTool.exe check
+          else
+            ./build/KilocycleDevTool_artefacts/Release/KilocycleDevTool check
+          fi
+
+      # Renders the editor to a PNG with no window and no display server. A panel
+      # that fails to construct or paint fails the build instead of shipping.
+      - name: Panel smoke test
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            ./build/KilocycleDevTool_artefacts/Release/KilocycleDevTool.exe shot panel.png
+          else
+            ./build/KilocycleDevTool_artefacts/Release/KilocycleDevTool shot panel.png
+          fi
+          test -s panel.png
+
+      # The GPL wants the corresponding source of a binary to be identifiable.
+      # Recording both revisions in the package makes that a one-liner.
+      - name: Write build info
+        shell: bash
+        run: |
+          mkdir -p dist/Kilocycle
+          {
+            echo "Kilocycle"
+            echo
+            echo "Built by GitHub Actions on $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "Platform:       ${{ matrix.label }}"
+            echo "Source:         ${{ github.server_url }}/${{ github.repository }}"
+            echo "Commit:         ${{ github.sha }}"
+            echo "JUCE submodule: $(git -C libs/JUCE rev-parse HEAD)"
+            echo
+            echo "This program is free software. Kilocycle's own source is under the GNU"
+            echo "General Public License v3 or later; because it links JUCE, the combined"
+            echo "work also carries the AGPLv3 network clause. See LICENSE, LICENSE.AGPLv3"
+            echo "and NOTICE.md, all included here."
+            echo
+            echo "The corresponding source for this exact binary is the commit above,"
+            echo "together with the pinned JUCE submodule."
+          } > dist/Kilocycle/BUILD-INFO.txt
+
+      - name: Package (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          cp -r build/Kilocycle_artefacts/Release/VST3/Kilocycle.vst3 dist/Kilocycle/
+          cp build/Kilocycle_artefacts/Release/Standalone/Kilocycle dist/Kilocycle/
+          cp LICENSE LICENSE.AGPLv3 NOTICE.md README.md dist/Kilocycle/
+          printf '%s\n' \
+            'Copy Kilocycle.vst3 to ~/.vst3/ (or /usr/lib/vst3 for all users).' \
+            'Kilocycle is the standalone application; it needs ALSA or JACK.' \
+            > dist/Kilocycle/INSTALL.txt
+          tar czf ${{ matrix.package }} -C dist Kilocycle
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Copy-Item -Recurse build/Kilocycle_artefacts/Release/VST3/Kilocycle.vst3 dist/Kilocycle/
+          Copy-Item build/Kilocycle_artefacts/Release/Standalone/Kilocycle.exe dist/Kilocycle/
+          Copy-Item LICENSE,LICENSE.AGPLv3,NOTICE.md,README.md dist/Kilocycle/
+          @(
+            'Copy Kilocycle.vst3 to C:\Program Files\Common Files\VST3\.'
+            'Kilocycle.exe is the standalone application.'
+          ) | Set-Content dist/Kilocycle/INSTALL.txt
+          Compress-Archive -Path dist/Kilocycle -DestinationPath ${{ matrix.package }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kilocycle-${{ matrix.label }}
+          path: ${{ matrix.package }}
+          if-no-files-found: error
+
+  release:
+    name: draft release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      # Drafted rather than published, so the release notes get a human read
+      # before anyone downloads a binary.
+      - name: Draft the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            --draft \
+            --title "Kilocycle ${GITHUB_REF_NAME}" \
+            --generate-notes \
+            --notes "Free software: Kilocycle's own source is GPLv3-or-later, and because it links JUCE the combined work also carries the AGPLv3 network clause. Each archive contains LICENSE, LICENSE.AGPLv3, NOTICE.md and a BUILD-INFO.txt naming the exact commit and JUCE revision it was built from." \
+            artifacts/*
