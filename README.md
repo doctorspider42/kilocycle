@@ -258,10 +258,21 @@ Every push builds and tests on Linux and Windows; see
 `KilocycleDevTool check` suite as above and renders the panel headlessly, so a
 broken editor fails the build rather than shipping.
 
-Pushing a `v*` tag publishes a draft release with a Linux `.tar.gz` and a Windows
-`.zip`, each containing the VST3, the standalone, both licence texts and the
-notices. Cutting a release is:
+There are two kinds of download:
+
+**[Latest dev build](../../releases/tag/dev)** — every green push to `main`
+replaces a rolling `dev` prerelease, so there is always a current binary. The
+panel footer shows the commit it was built from (`v0.1.0 · a1b2c3d`) and
+`BUILD-INFO.txt` names both that commit and the exact JUCE revision. These builds
+pass CI but have not been opened in a host, which is the whole reason they are
+marked prerelease.
+
+**Tagged releases** — pushing a `v*` tag produces a *draft* release instead, so
+the notes and the binaries get a human read before anyone downloads them:
 
 ```bash
 git tag -a v0.1.0 -m "Kilocycle 0.1.0" && git push origin v0.1.0
 ```
+
+Both kinds ship a Linux `.tar.gz` and a Windows `.zip` containing the VST3, the
+standalone, both licence texts and the notices.

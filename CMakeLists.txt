@@ -17,6 +17,12 @@ endif()
 option(KILOCYCLE_COPY_AFTER_BUILD "Install the built plug-in into the user VST3 folder" ON)
 option(KILOCYCLE_BUILD_TOOLS "Build the developer tool (offline DSP check / panel renderer)" OFF)
 
+# Shown on the panel next to the version. CI passes the commit it built from, so a
+# downloaded binary can always be traced back to its source. Deliberately separate
+# from the plug-in version, which stays stable so hosts do not re-scan on every
+# development build.
+set(KILOCYCLE_BUILD_ID "" CACHE STRING "Build identifier shown in the UI (e.g. a commit SHA)")
+
 # ---------------------------------------------------------------------------
 # JUCE
 # ---------------------------------------------------------------------------
@@ -65,6 +71,12 @@ target_sources(Kilocycle PRIVATE
     Source/gui/RockerSwitch.cpp)
 
 target_include_directories(Kilocycle PRIVATE Source)
+
+if (KILOCYCLE_BUILD_ID)
+    string(SUBSTRING "${KILOCYCLE_BUILD_ID}" 0 7 KILOCYCLE_BUILD_ID_SHORT)
+    target_compile_definitions(Kilocycle PRIVATE
+        KILOCYCLE_BUILD_ID="${KILOCYCLE_BUILD_ID_SHORT}")
+endif()
 
 target_compile_definitions(Kilocycle PUBLIC
     JUCE_WEB_BROWSER=0

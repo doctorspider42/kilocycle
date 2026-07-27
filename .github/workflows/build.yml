@@ -57,6 +57,7 @@ jobs:
           -DCMAKE_BUILD_TYPE=Release
           -DKILOCYCLE_COPY_AFTER_BUILD=OFF
           -DKILOCYCLE_BUILD_TOOLS=ON
+          -DKILOCYCLE_BUILD_ID=${{ github.sha }}
 
       - name: Build
         run: cmake --build build --config Release --parallel 4
@@ -136,6 +137,69 @@ jobs:
           name: kilocycle-${{ matrix.label }}
           path: ${{ matrix.package }}
           if-no-files-found: error
+
+  # Every green push to main replaces the rolling "dev" prerelease, so there is
+  # always a current download. Prerelease and never marked latest: these builds
+  # have passed CI but nobody has opened them in a host yet, which is exactly the
+  # distinction a tagged release exists to make.
+  dev-release:
+    name: dev build
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      # Recreated rather than edited: a published release cannot have its tag
+      # moved, and deleting the tag with it keeps `dev` pointing at this commit.
+      - name: Publish the rolling dev build
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          short="${GITHUB_SHA:0:7}"
+          subject=$(git log -1 --pretty=%s)
+
+          cat > notes.md <<EOF
+          Automatic build of \`main\` at [\`${short}\`](${{ github.server_url }}/${{ github.repository }}/commit/${GITHUB_SHA}) — $(date -u '+%Y-%m-%d %H:%M UTC').
+
+          > $subject
+
+          **This is a development build.** It passed the offline DSP checks and the
+          headless panel render on Linux and Windows, but it has not been tested in
+          a host. For something that has, use a tagged release.
+
+          The panel footer shows \`${short}\` so you can tell builds apart, and
+          \`BUILD-INFO.txt\` in each archive names the commit and the exact JUCE
+          revision it was built from.
+
+          Free software: Kilocycle's own source is GPLv3-or-later, and because it
+          links JUCE the combined work also carries the AGPLv3 network clause. Both
+          licence texts and \`NOTICE.md\` are in every archive.
+          EOF
+
+          gh release delete dev --yes --cleanup-tag 2>/dev/null || true
+
+          # If a previous run left the tag behind without a release, `gh release
+          # create` would silently attach to the old tag and publish a release
+          # pointing at the wrong commit. Make sure it is gone.
+          git push --delete origin dev 2>/dev/null || true
+
+          gh release create dev \
+            --prerelease \
+            --latest=false \
+            --target "$GITHUB_SHA" \
+            --title "Kilocycle dev ($short)" \
+            --notes-file notes.md \
+            artifacts/*
 
   release:
     name: draft release

@@ -142,8 +142,15 @@ void Backdrop::paintPanel (Graphics& g)
                            layout.footer, 1.3f, juce::Justification::left);
         skin::drawTracked (g, "DRAG THE CURSOR ON THE DIAL TO TUNE THE MID BAND", font,
                            layout.footer, 1.3f, juce::Justification::centred);
-        skin::drawTracked (g, juce::String ("v") + JucePlugin_VersionString, font,
-                           layout.footer, 1.3f, juce::Justification::right);
+        // Development builds carry the commit they came from, so a bug report can
+        // always name the exact binary.
+        auto version = juce::String ("v") + JucePlugin_VersionString;
+
+       #ifdef KILOCYCLE_BUILD_ID
+        version << skin::u8 ("  \xc2\xb7  ") << KILOCYCLE_BUILD_ID;
+       #endif
+
+        skin::drawTracked (g, version, font, layout.footer, 1.3f, juce::Justification::right);
     }
 }
 
