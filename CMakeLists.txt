@@ -30,8 +30,7 @@ set(KILOCYCLE_BUILD_ID "" CACHE STRING "Build identifier shown in the UI (e.g. a
 if (NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/libs/JUCE/CMakeLists.txt")
     message(FATAL_ERROR
         "JUCE not found in libs/JUCE.\n"
-        "Run: git clone --depth 1 --branch 8.0.15 "
-        "https://github.com/juce-framework/JUCE.git libs/JUCE")
+        "Run: git submodule update --init")
 endif()
 
 add_subdirectory(libs/JUCE)

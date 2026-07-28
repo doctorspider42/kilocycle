@@ -107,6 +107,25 @@ jobs:
             echo "together with the pinned JUCE submodule."
           } > dist/Kilocycle/BUILD-INFO.txt
 
+      # The notices file names the third-party components, but a link into the
+      # repository is useless to someone holding only an archive. Carry the actual
+      # licence texts along with the binaries.
+      - name: Collect third-party licence texts
+        shell: bash
+        run: |
+          {
+            echo "Third-party licence texts for components linked into this binary."
+            echo "The authoritative list of components is in NOTICE.md."
+            echo
+            echo "==================== JUCE (AGPLv3 or commercial) ===================="
+            echo
+            cat libs/JUCE/LICENSE.md
+            echo
+            echo "==================== VST3 SDK (MIT) ===================="
+            echo
+            cat libs/JUCE/modules/juce_audio_processors_headless/format_types/VST3_SDK/LICENSE.txt
+          } > dist/Kilocycle/THIRD-PARTY-LICENSES.txt
+
       - name: Package (Linux)
         if: runner.os == 'Linux'
         run: |
