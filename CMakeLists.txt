@@ -38,7 +38,14 @@ add_subdirectory(libs/JUCE)
 # ---------------------------------------------------------------------------
 # Target
 # ---------------------------------------------------------------------------
+# The icon is vector-drawn by Source/gui/Icon.cpp and rendered to PNG by the dev
+# tool (`kilocycle-devtool icon`), so it comes from the same palette and the same
+# primitives as the panel. Two sizes: the large one is the source for the window
+# and executable icons, the small one is drawn with less detail because at 128 px
+# the numerals and the fine graduations would only turn to mud.
 juce_add_plugin(Kilocycle
+    ICON_BIG                    "${CMAKE_CURRENT_SOURCE_DIR}/docs/icon.png"
+    ICON_SMALL                  "${CMAKE_CURRENT_SOURCE_DIR}/docs/icon-small.png"
     PRODUCT_NAME                "Kilocycle"
     COMPANY_NAME                "Kilocycle Audio"
     COMPANY_WEBSITE             "https://example.invalid/kilocycle"
@@ -61,6 +68,7 @@ target_sources(Kilocycle PRIVATE
     Source/PluginEditor.cpp
     Source/Parameters.cpp
     Source/gui/Skin.cpp
+    Source/gui/Icon.cpp
     Source/gui/RadioLookAndFeel.cpp
     Source/gui/RadioKnob.cpp
     Source/gui/VuMeter.cpp

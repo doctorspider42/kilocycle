@@ -5,8 +5,9 @@
 
     Developer tool. Two jobs, neither of which needs a host or a window:
 
-      kilocycle-devtool check            - offline DSP smoke test
-      kilocycle-devtool shot <png> [valve] - render the panel to a PNG
+      kilocycle-devtool check               - offline DSP smoke test
+      kilocycle-devtool shot <png> [valve]  - render the panel to a PNG
+      kilocycle-devtool icon <png> [size]   - render the application icon to a PNG
 
     Build with -DKILOCYCLE_BUILD_TOOLS=ON.
 */
@@ -15,6 +16,7 @@
 
 #include "../Source/PluginProcessor.h"
 #include "../Source/PluginEditor.h"
+#include "../Source/gui/Icon.h"
 
 namespace
 {
@@ -358,6 +360,32 @@ int runCheck()
     return failures == 0 ? 0 : 1;
 }
 
+int writePng (const juce::Image& image, const juce::File& destination)
+{
+    if (image.isNull())
+    {
+        std::cerr << "nothing to write" << std::endl;
+        return 1;
+    }
+
+    destination.deleteFile();
+
+    if (auto stream = destination.createOutputStream())
+    {
+        juce::PNGImageFormat png;
+
+        if (png.writeImageToStream (image, *stream))
+        {
+            std::cout << "wrote " << destination.getFullPathName() << " ("
+                      << image.getWidth() << "x" << image.getHeight() << ")" << std::endl;
+            return 0;
+        }
+    }
+
+    std::cerr << "could not write " << destination.getFullPathName() << std::endl;
+    return 1;
+}
+
 int renderShot (const juce::File& destination, int valveIndex)
 {
     kc::KilocycleProcessor proc;
@@ -403,30 +431,15 @@ int renderShot (const juce::File& destination, int valveIndex)
 
     editor->setSize (1080, 612);
 
-    const auto image = editor->createComponentSnapshot (editor->getLocalBounds(), true, 1.0f);
+    return writePng (editor->createComponentSnapshot (editor->getLocalBounds(), true, 1.0f), destination);
+}
 
-    if (image.isNull())
-    {
-        std::cerr << "snapshot failed" << std::endl;
-        return 1;
-    }
-
-    destination.deleteFile();
-
-    if (auto stream = destination.createOutputStream())
-    {
-        juce::PNGImageFormat png;
-
-        if (png.writeImageToStream (image, *stream))
-        {
-            std::cout << "wrote " << destination.getFullPathName() << " ("
-                      << image.getWidth() << "x" << image.getHeight() << ")" << std::endl;
-            return 0;
-        }
-    }
-
-    std::cerr << "could not write " << destination.getFullPathName() << std::endl;
-    return 1;
+/** Renders the application icon. This is how docs/icon.png and docs/icon-small.png
+    are produced - CMake hands both to JUCE, so the icon is generated from the same
+    code as the panel rather than maintained as artwork on the side. */
+int renderIcon (const juce::File& destination, int size)
+{
+    return writePng (kc::gui::renderIcon (size), destination);
 }
 
 } // namespace
@@ -445,6 +458,12 @@ int main (int argc, char** argv)
                                .getChildFile (argc > 2 ? juce::String (argv[2]) : "panel.png"),
                            argc > 3 ? juce::String (argv[3]).getIntValue() : -1);
 
-    std::cerr << "usage: kilocycle-devtool [check | shot <file.png> [valve index]]" << std::endl;
+    if (command == "icon")
+        return renderIcon (juce::File::getCurrentWorkingDirectory()
+                               .getChildFile (argc > 2 ? juce::String (argv[2]) : "icon.png"),
+                           argc > 3 ? juce::String (argv[3]).getIntValue() : 1024);
+
+    std::cerr << "usage: kilocycle-devtool [check | shot <file.png> [valve index] | icon <file.png> [size]]"
+              << std::endl;
     return 2;
 }

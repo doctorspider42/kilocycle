@@ -71,17 +71,26 @@ jobs:
             ./build/KilocycleDevTool_artefacts/Release/KilocycleDevTool check
           fi
 
-      # Renders the editor to a PNG with no window and no display server. A panel
-      # that fails to construct or paint fails the build instead of shipping.
-      - name: Panel smoke test
+      # Renders the editor and the icon to PNGs with no window and no display
+      # server. A panel or an icon that fails to construct or paint fails the
+      # build instead of shipping.
+      - name: Panel and icon smoke test
         shell: bash
         run: |
+          tool=./build/KilocycleDevTool_artefacts/Release/KilocycleDevTool
+
           if [ "$RUNNER_OS" = "Windows" ]; then
-            ./build/KilocycleDevTool_artefacts/Release/KilocycleDevTool.exe shot panel.png
-          else
-            ./build/KilocycleDevTool_artefacts/Release/KilocycleDevTool shot panel.png
+            tool="$tool.exe"
           fi
+
+          "$tool" shot panel.png
           test -s panel.png
+
+          # Both committed sizes, plus the smallest the icon has to survive.
+          for size in 1024 128 16; do
+            "$tool" icon "icon-$size.png" "$size"
+            test -s "icon-$size.png"
+          done
 
       # The GPL wants the corresponding source of a binary to be identifiable.
       # Recording both revisions in the package makes that a one-liner.
